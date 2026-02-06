@@ -2,6 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- ✅ Location Permissions -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+    <!-- ✅ Compass Sensor -->
+    <uses-feature android:name="android.hardware.sensor.compass"/>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -9,6 +16,7 @@
         android:icon="@drawable/islamic_splash_logo"
         android:roundIcon="@drawable/islamic_splash_logo"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.MySplashScreen">
 
         <activity

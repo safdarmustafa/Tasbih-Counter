@@ -1,11 +1,5 @@
 package com.example.tasbihcounter
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CircleShape
-
-
-import java.time.format.DateTimeFormatter
+import androidx.compose.foundation.interaction.MutableInteractionSource
 
 import android.media.AudioAttributes
 import android.media.SoundPool
@@ -17,7 +11,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,45 +41,110 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SplashScreenJcTheme {
-                Scaffold { innerPadding ->
-                    AppNavigation(Modifier.padding(innerPadding))
-                }
+                AppNavigation()
             }
         }
     }
 }
 
 @Composable
-fun AppNavigation(modifier: Modifier = Modifier) {
+fun AppNavigation() {
 
     val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
-    NavHost(
-        navController = navController,
-        startDestination = "tasbih",
-        modifier = modifier
-    ) {
-        composable("tasbih") {
-            IslamicSplash(
-                onNavigateToPrayer = {
-                    navController.navigate("prayer")
-                }
-            )
+    Scaffold(
+        bottomBar = {
+            NavigationBar(
+                containerColor = Color(0xFF1A120F)
+            ) {
+
+                NavigationBarItem(
+                    selected = currentRoute == "tasbih",
+                    onClick = {
+                        navController.navigate("tasbih") {
+                            popUpTo(navController.graph.startDestinationId)
+                            launchSingleTop = true
+                        }
+                    },
+                    icon = { Text("📿") },
+                    label = { Text("Tasbih") }
+                )
+
+                NavigationBarItem(
+                    selected = currentRoute == "prayer",
+                    onClick = {
+                        navController.navigate("prayer") {
+                            popUpTo(navController.graph.startDestinationId)
+                            launchSingleTop = true
+                        }
+                    },
+                    icon = { Text("🕌") },
+                    label = { Text("Prayer") }
+                )
+
+                NavigationBarItem(
+                    selected = currentRoute == "qibla",
+                    onClick = {
+                        navController.navigate("qibla") {
+                            popUpTo(navController.graph.startDestinationId)
+                            launchSingleTop = true
+                        }
+                    },
+                    icon = { Text("🧭") },
+                    label = { Text("Qibla") }
+                )
+
+                // ✅ NEW DUA TAB
+                NavigationBarItem(
+                    selected = currentRoute == "dua",
+                    onClick = {
+                        navController.navigate("dua") {
+                            popUpTo(navController.graph.startDestinationId)
+                            launchSingleTop = true
+                        }
+                    },
+                    icon = { Text("📖") },
+                    label = { Text("Dua") }
+                )
+            }
         }
+    ) { innerPadding ->
 
-        composable("prayer") {
-            PrayerTrackerScreen(
-                onBack = { navController.popBackStack() }
-            )
+        NavHost(
+            navController = navController,
+            startDestination = "tasbih",
+            modifier = Modifier.padding(innerPadding)
+        ) {
+
+            composable("tasbih") {
+                IslamicSplash()
+            }
+
+            composable("prayer") {
+                PrayerTrackerScreen(
+                    onBack = { navController.navigate("tasbih") }
+                )
+            }
+
+            composable("qibla") {
+                QiblaScreen(
+                    onBack = { navController.navigate("tasbih") }
+                )
+            }
+
+            // ✅ NEW ROUTE
+            composable("dua") {
+                DuaScreen()
+            }
         }
     }
 }
 
+
 @Composable
-fun IslamicSplash(
-    modifier: Modifier = Modifier,
-    onNavigateToPrayer: () -> Unit = {}
-) {
+fun IslamicSplash() {
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -165,10 +223,26 @@ fun IslamicSplash(
     }
 
     Box(
-        modifier
+        Modifier
             .fillMaxSize()
             .background(gradient)
     ) {
+
+        // 🔊 MUTE BUTTON (NO RIPPLE)
+        Text(
+            text = if (isMuted) "🔇 UnMute " else "🔊 Mute",
+            fontSize = 18.sp,
+            color = Color(0xFFE2C07A),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(20.dp)
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) {
+                    isMuted = !isMuted
+                }
+        )
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -236,7 +310,10 @@ fun IslamicSplash(
                                     ),
                                 RoundedCornerShape(30.dp)
                             )
-                            .clickable {
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) {
                                 selectedDhikr = dhikr
                                 playClick()
                             }
@@ -258,7 +335,10 @@ fun IslamicSplash(
                 modifier = Modifier
                     .size(170.dp)
                     .background(Color.White.copy(0.12f), CircleShape)
-                    .clickable {
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
                         playClick()
                         count++
                         scope.launch {
@@ -275,7 +355,10 @@ fun IslamicSplash(
             Box(
                 modifier = Modifier
                     .background(Color(0xFF3E2A24), RoundedCornerShape(22.dp))
-                    .clickable {
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
                         playClick()
                         count = 0
                         scope.launch {
@@ -285,302 +368,6 @@ fun IslamicSplash(
                     .padding(horizontal = 26.dp, vertical = 10.dp)
             ) {
                 Text("Reset", color = Color.White)
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            Box(
-                modifier = Modifier
-                    .background(Color(0xFFE2C07A), RoundedCornerShape(22.dp))
-                    .clickable { onNavigateToPrayer() }
-                    .padding(horizontal = 26.dp, vertical = 10.dp)
-            ) {
-                Text(
-                    "Prayer Tracker",
-                    color = Color(0xFF2A1C18),
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun PrayerTrackerScreen(onBack: () -> Unit) {
-
-    val prayers = listOf("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")
-
-    val prayerTimes = mapOf(
-        "Fajr" to LocalTime.of(5, 10),
-        "Dhuhr" to LocalTime.of(13, 15),
-        "Asr" to LocalTime.of(16, 45),
-        "Maghrib" to LocalTime.of(18, 30),
-        "Isha" to LocalTime.of(19, 50)
-    )
-
-    var prayerStates by remember { mutableStateOf(prayers.associateWith { false }) }
-    var currentTime by remember { mutableStateOf(LocalTime.now()) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            currentTime = LocalTime.now()
-            delay(1000)
-        }
-    }
-
-    val hourFormatter = DateTimeFormatter.ofPattern("hh")
-    val minuteFormatter = DateTimeFormatter.ofPattern("mm")
-    val secondFormatter = DateTimeFormatter.ofPattern("ss")
-    val ampmFormatter = DateTimeFormatter.ofPattern("a")
-    val timeFormatter = DateTimeFormatter.ofPattern("hh:mm a")
-
-    val currentPrayer = when {
-        currentTime.isBefore(prayerTimes["Fajr"]) -> "Isha"
-        currentTime.isBefore(prayerTimes["Dhuhr"]) -> "Fajr"
-        currentTime.isBefore(prayerTimes["Asr"]) -> "Dhuhr"
-        currentTime.isBefore(prayerTimes["Maghrib"]) -> "Asr"
-        currentTime.isBefore(prayerTimes["Isha"]) -> "Maghrib"
-        else -> "Isha"
-    }
-
-    val nextPrayer = when (currentPrayer) {
-        "Fajr" -> "Dhuhr"
-        "Dhuhr" -> "Asr"
-        "Asr" -> "Maghrib"
-        "Maghrib" -> "Isha"
-        else -> "Fajr"
-    }
-
-    val nextTime = prayerTimes[nextPrayer] ?: LocalTime.of(0, 0)
-
-    val currentMinutes = currentTime.hour * 60 + currentTime.minute
-    val nextMinutes = nextTime.hour * 60 + nextTime.minute
-
-    val totalMinutes =
-        if (nextMinutes > currentMinutes)
-            nextMinutes - currentMinutes
-        else
-            (24 * 60 - currentMinutes) + nextMinutes
-
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-
-    val countdownText =
-        if (hours > 0) "${hours}h ${minutes}m"
-        else "${minutes}m"
-
-    val completedCount = prayerStates.values.count { it }
-    val progress = completedCount / 5f
-
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(800),
-        label = ""
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF241612), Color(0xFF140C09))
-                )
-            )
-            .padding(20.dp)
-    ) {
-
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-
-            // ===== TOP SECTION =====
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-
-                Text(
-                    text = "←",
-                    fontSize = 22.sp,
-                    color = Color.White.copy(0.7f),
-                    modifier = Modifier
-                        .align(Alignment.Start)
-                        .clickable { onBack() }
-                )
-
-                Spacer(Modifier.height(20.dp))
-
-                // Glass Clock Card
-                Box(
-                    modifier = Modifier
-                        .background(
-                            Color(0xFFE2C07A).copy(alpha = 0.08f),
-                            RoundedCornerShape(28.dp)
-                        )
-                        .padding(horizontal = 28.dp, vertical = 22.dp)
-                ) {
-
-                    Row(verticalAlignment = Alignment.Bottom) {
-
-                        Text(
-                            text = currentTime.format(hourFormatter),
-                            fontSize = 48.sp,
-                            fontWeight = FontWeight.Light,
-                            color = Color(0xFFE2C07A)
-                        )
-
-                        Text(
-                            text = ":",
-                            fontSize = 48.sp,
-                            fontWeight = FontWeight.Light,
-                            color = Color(0xFFE2C07A)
-                        )
-
-                        Text(
-                            text = currentTime.format(minuteFormatter),
-                            fontSize = 48.sp,
-                            fontWeight = FontWeight.Light,
-                            color = Color(0xFFE2C07A)
-                        )
-
-                        Spacer(Modifier.width(8.dp))
-
-                        Column {
-                            Text(
-                                text = currentTime.format(secondFormatter),
-                                fontSize = 16.sp,
-                                color = Color.White.copy(0.6f)
-                            )
-                            Text(
-                                text = currentTime.format(ampmFormatter),
-                                fontSize = 14.sp,
-                                color = Color.White.copy(0.5f)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                Text(
-                    text = currentPrayer.uppercase(),
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFE2C07A)
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                Box(
-                    modifier = Modifier
-                        .background(
-                            Color.White.copy(alpha = 0.06f),
-                            RoundedCornerShape(20.dp)
-                        )
-                        .padding(horizontal = 18.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Next: $nextPrayer in $countdownText",
-                        fontSize = 13.sp,
-                        color = Color.White.copy(0.7f)
-                    )
-                }
-
-                Spacer(Modifier.height(24.dp))
-
-                Box(contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(
-                        progress = animatedProgress,
-                        strokeWidth = 6.dp,
-                        color = Color(0xFFE2C07A),
-                        trackColor = Color.White.copy(0.08f),
-                        modifier = Modifier.size(110.dp)
-                    )
-
-                    Text(
-                        "$completedCount / 5",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            // ===== BOTTOM SECTION =====
-            Column {
-
-                prayers.chunked(2).forEach { rowPrayers ->
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-
-                        rowPrayers.forEach { prayer ->
-
-                            val isCompleted = prayerStates[prayer] == true
-                            val isCurrent = prayer == currentPrayer
-                            val time = prayerTimes[prayer]
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .background(
-                                        if (isCurrent)
-                                            Color(0xFFE2C07A).copy(alpha = 0.15f)
-                                        else
-                                            Color.White.copy(alpha = 0.05f),
-                                        RoundedCornerShape(22.dp)
-                                    )
-                                    .clickable {
-                                        prayerStates =
-                                            prayerStates.toMutableMap().apply {
-                                                this[prayer] = !isCompleted
-                                            }
-                                    }
-                                    .padding(18.dp)
-                            ) {
-
-                                Column {
-
-                                    Text(
-                                        prayer,
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (isCurrent)
-                                            Color(0xFFE2C07A)
-                                        else
-                                            Color.White
-                                    )
-
-                                    Text(
-                                        time?.format(timeFormatter) ?: "",
-                                        fontSize = 12.sp,
-                                        color = Color.White.copy(0.6f)
-                                    )
-
-                                    Spacer(Modifier.height(10.dp))
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(14.dp)
-                                            .background(
-                                                if (isCompleted)
-                                                    Color(0xFFE2C07A)
-                                                else
-                                                    Color.White.copy(0.25f),
-                                                CircleShape
-                                            )
-                                    )
-                                }
-                            }
-                        }
-
-                        if (rowPrayers.size == 1) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-                }
             }
         }
     }

@@ -31,13 +31,13 @@ object DataStoreManager {
     }
 
     // ===============================
-    // 🔹 PRAYER TRACKER (NEW)
+    // 🔹 PRAYER TRACKER (FIXED)
     // ===============================
 
-    private val DATE_KEY = stringPreferencesKey("prayer_saved_date")
+    private val DATE_KEY = stringPreferencesKey("saved_date")
 
     private fun prayerKey(name: String) =
-        booleanPreferencesKey("prayer_$name")
+        booleanPreferencesKey("prayer_state_$name")
 
     fun getPrayerState(context: Context, name: String): Flow<Boolean> {
         return context.dataStore.data.map { prefs ->
@@ -54,13 +54,15 @@ object DataStoreManager {
 
     suspend fun checkAndResetIfNewDay(context: Context) {
         context.dataStore.edit { prefs ->
-            val savedDate = prefs[DATE_KEY]
+
             val today = LocalDate.now().toString()
+            val savedDate = prefs[DATE_KEY]
 
             if (savedDate != today) {
-                // Clear only prayer keys
+
+                // Remove ONLY prayer state keys
                 prefs.asMap().keys
-                    .filter { it.name.startsWith("prayer_") }
+                    .filter { it.name.startsWith("prayer_state_") }
                     .forEach { prefs.remove(it) }
 
                 prefs[DATE_KEY] = today
