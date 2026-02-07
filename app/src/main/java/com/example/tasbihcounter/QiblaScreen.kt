@@ -208,13 +208,10 @@ fun PremiumCompass() {
 
         Box(contentAlignment = Alignment.Center) {
 
-            // ROTATE WHOLE COMPASS (ticks + directions)
             Box(
                 modifier = Modifier
                     .size(320.dp)
-                    .graphicsLayer {
-                        rotationZ = animatedRotation
-                    }
+                    .graphicsLayer { rotationZ = animatedRotation }
             ) {
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -255,7 +252,6 @@ fun PremiumCompass() {
                 Text("W", Modifier.align(Alignment.CenterStart), color = Color(0xFFD0C4BC))
             }
 
-            // KAABA FIXED (does NOT rotate)
             Image(
                 painter = painterResource(id = R.drawable.kaaba),
                 contentDescription = "Kaaba",

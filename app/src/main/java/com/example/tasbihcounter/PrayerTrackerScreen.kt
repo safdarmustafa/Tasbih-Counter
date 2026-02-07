@@ -1,7 +1,8 @@
 package com.example.tasbihcounter
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,17 +13,55 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import kotlinx.datetime.*
+import kotlin.time.ExperimentalTime
 
+// 🌌 Animated Ambient Background
+@Composable
+fun PremiumBackground(content: @Composable () -> Unit) {
+
+    val infiniteTransition = rememberInfiniteTransition(label = "")
+
+    val offset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 700f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(20000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = ""
+    )
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF2B1C17),
+                        Color(0xFF140C09)
+                    ),
+                    center = Offset(offset, offset),
+                    radius = 1200f
+                )
+            )
+    ) {
+        content()
+    }
+}
+
+@OptIn(ExperimentalTime::class)
 @Composable
 fun PrayerTrackerScreen(onBack: () -> Unit) {
 
@@ -31,21 +70,53 @@ fun PrayerTrackerScreen(onBack: () -> Unit) {
 
     val prayers = listOf("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")
 
-    val prayerTimes = mapOf(
-        "Fajr" to LocalTime.of(5, 10),
-        "Dhuhr" to LocalTime.of(13, 15),
-        "Asr" to LocalTime.of(16, 45),
-        "Maghrib" to LocalTime.of(18, 30),
-        "Isha" to LocalTime.of(19, 50)
-    )
+    var prayerTimes by remember { mutableStateOf<Map<String, LocalTime>?>(null) }
 
-    // ✅ Reset if new day
+    // Fetch prayer times
     LaunchedEffect(Unit) {
-        DataStoreManager.checkAndResetIfNewDay(context)
+
+        val result = kotlinx.coroutines.withContext(
+            kotlinx.coroutines.Dispatchers.IO
+        ) {
+
+            val location = getUserLocation(context)
+
+            if (location != null) {
+
+                val adhanTimes =
+                    PrayerTimeHelper.getTodayPrayerTimes(
+                        location.first,
+                        location.second
+                    )
+
+                mapOf(
+                    "Fajr" to adhanTimes.fajr.toLocalTimeSafe(),
+                    "Dhuhr" to adhanTimes.dhuhr.toLocalTimeSafe(),
+                    "Asr" to adhanTimes.asr.toLocalTimeSafe(),
+                    "Maghrib" to adhanTimes.maghrib.toLocalTimeSafe(),
+                    "Isha" to adhanTimes.isha.toLocalTimeSafe()
+                )
+            } else {
+                null
+            }
+        }
+
+        prayerTimes = result
     }
 
-    // ✅ Load saved states (Improved structure)
-    var prayerStates by remember { mutableStateOf(prayers.associateWith { false }) }
+
+    if (prayerTimes == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    val times = prayerTimes!!
+
+    var prayerStates by remember {
+        mutableStateOf(prayers.associateWith { false })
+    }
 
     LaunchedEffect(Unit) {
         prayers.forEach { prayer ->
@@ -60,7 +131,7 @@ fun PrayerTrackerScreen(onBack: () -> Unit) {
         }
     }
 
-    // ✅ Real-time clock
+    // Real-time clock
     var currentTime by remember { mutableStateOf(LocalTime.now()) }
 
     LaunchedEffect(Unit) {
@@ -70,256 +141,250 @@ fun PrayerTrackerScreen(onBack: () -> Unit) {
         }
     }
 
-    val hourFormatter = DateTimeFormatter.ofPattern("hh")
-    val minuteFormatter = DateTimeFormatter.ofPattern("mm")
-    val secondFormatter = DateTimeFormatter.ofPattern("ss")
-    val ampmFormatter = DateTimeFormatter.ofPattern("a")
-    val timeFormatter = DateTimeFormatter.ofPattern("hh:mm a")
+    val formatter = DateTimeFormatter.ofPattern("hh:mm a")
 
-    val currentPrayer = when {
-        currentTime.isBefore(prayerTimes["Fajr"]) -> "Isha"
-        currentTime.isBefore(prayerTimes["Dhuhr"]) -> "Fajr"
-        currentTime.isBefore(prayerTimes["Asr"]) -> "Dhuhr"
-        currentTime.isBefore(prayerTimes["Maghrib"]) -> "Asr"
-        currentTime.isBefore(prayerTimes["Isha"]) -> "Maghrib"
-        else -> "Isha"
-    }
-
-    val nextPrayer = when (currentPrayer) {
-        "Fajr" -> "Dhuhr"
-        "Dhuhr" -> "Asr"
-        "Asr" -> "Maghrib"
-        "Maghrib" -> "Isha"
+    val nextPrayer = when {
+        currentTime.isBefore(times["Fajr"]) -> "Fajr"
+        currentTime.isBefore(times["Dhuhr"]) -> "Dhuhr"
+        currentTime.isBefore(times["Asr"]) -> "Asr"
+        currentTime.isBefore(times["Maghrib"]) -> "Maghrib"
+        currentTime.isBefore(times["Isha"]) -> "Isha"
         else -> "Fajr"
     }
 
-    val nextTime = prayerTimes[nextPrayer] ?: LocalTime.of(0, 0)
+    val nextTime = times[nextPrayer] ?: LocalTime.MIDNIGHT
 
-    val currentMinutes = currentTime.hour * 60 + currentTime.minute
-    val nextMinutes = nextTime.hour * 60 + nextTime.minute
+    // 🔥 SMOOTH PER-SECOND COUNTDOWN
+    val nowInSeconds = currentTime.toSecondOfDay()
+    val nextInSeconds = nextTime.toSecondOfDay()
 
-    val totalMinutes =
-        if (nextMinutes > currentMinutes)
-            nextMinutes - currentMinutes
+    val remainingSeconds =
+        if (nextInSeconds > nowInSeconds)
+            nextInSeconds - nowInSeconds
         else
-            (24 * 60 - currentMinutes) + nextMinutes
+            (24 * 3600 - nowInSeconds) + nextInSeconds
 
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
+    val animatedSeconds by animateIntAsState(
+        targetValue = remainingSeconds,
+        animationSpec = tween(500),
+        label = ""
+    )
 
-    val countdownText =
-        if (hours > 0) "${hours}h ${minutes}m"
-        else "${minutes}m"
+    val displayHours = animatedSeconds / 3600
+    val displayMinutes = (animatedSeconds % 3600) / 60
+    val displaySecs = animatedSeconds % 60
 
     val completedCount = prayerStates.values.count { it }
     val progress = completedCount / 5f
 
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
-        animationSpec = tween(800),
+        animationSpec = tween(600),
         label = ""
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF241612), Color(0xFF140C09))
-                )
-            )
-            .padding(20.dp)
-    ) {
+    PremiumBackground {
 
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
+        Box(Modifier.fillMaxSize().padding(24.dp)) {
 
-            // ===== TOP SECTION =====
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
 
-                Text(
-                    text = "←",
-                    fontSize = 22.sp,
-                    color = Color.White.copy(0.7f),
-                    modifier = Modifier
-                        .align(Alignment.Start)
-                        .clickable { onBack() }
-                )
-
-                Spacer(Modifier.height(20.dp))
-
-                // Premium Clock
-                Box(
-                    modifier = Modifier
-                        .background(
-                            Color(0xFFE2C07A).copy(alpha = 0.08f),
-                            RoundedCornerShape(28.dp)
-                        )
-                        .padding(horizontal = 28.dp, vertical = 22.dp)
-                ) {
-
-                    Row(verticalAlignment = Alignment.Bottom) {
-
-                        Text(
-                            text = currentTime.format(hourFormatter),
-                            fontSize = 48.sp,
-                            fontWeight = FontWeight.Light,
-                            color = Color(0xFFE2C07A)
-                        )
-
-                        Text(":", fontSize = 48.sp, color = Color(0xFFE2C07A))
-
-                        Text(
-                            text = currentTime.format(minuteFormatter),
-                            fontSize = 48.sp,
-                            fontWeight = FontWeight.Light,
-                            color = Color(0xFFE2C07A)
-                        )
-
-                        Spacer(Modifier.width(8.dp))
-
-                        Column {
-                            Text(
-                                text = currentTime.format(secondFormatter),
-                                fontSize = 16.sp,
-                                color = Color.White.copy(0.6f)
-                            )
-                            Text(
-                                text = currentTime.format(ampmFormatter),
-                                fontSize = 14.sp,
-                                color = Color.White.copy(0.5f)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                Text(
-                    text = currentPrayer.uppercase(),
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFE2C07A)
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                Text(
-                    text = "Next: $nextPrayer in $countdownText",
-                    fontSize = 13.sp,
-                    color = Color.White.copy(0.7f)
-                )
-
-                Spacer(Modifier.height(24.dp))
+                // ✨ Golden Glow Pulse
+                val pulse by rememberInfiniteTransition(label = "")
+                    .animateFloat(
+                        initialValue = 0.7f,
+                        targetValue = 1.2f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(2000),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = ""
+                    )
 
                 Box(contentAlignment = Alignment.Center) {
+
                     CircularProgressIndicator(
                         progress = animatedProgress,
                         strokeWidth = 6.dp,
                         color = Color(0xFFE2C07A),
                         trackColor = Color.White.copy(0.08f),
-                        modifier = Modifier.size(110.dp)
+                        modifier = Modifier.size(190.dp)
                     )
+
+                    Box(
+                        modifier = Modifier
+                            .size((160 * pulse).dp)
+                            .background(
+                                Color(0xFFE2C07A).copy(alpha = 0.05f),
+                                CircleShape
+                            )
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(140.dp)
+                            .shadow(12.dp, CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(
+                                        Color(0xFF3E2A24),
+                                        Color(0xFF1A120F)
+                                    )
+                                ),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            currentTime.format(formatter),
+                            fontSize = 20.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Light
+                        )
+                    }
+                }
+
+                // NEXT PRAYER + SMOOTH COUNTDOWN
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
                     Text(
-                        "$completedCount / 5",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
+                        nextPrayer.uppercase(),
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE2C07A)
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Text(
+                        text = "in %02dh %02dm %02ds".format(
+                            displayHours,
+                            displayMinutes,
+                            displaySecs
+                        ),
+                        fontSize = 14.sp,
+                        color = Color.White.copy(0.7f),
+                        modifier = Modifier.animateContentSize()
                     )
                 }
-            }
 
-            // ===== BOTTOM PRAYER GRID =====
-            Column {
+                // Shimmer Cards
+                val shimmerTransition = rememberInfiniteTransition(label = "")
+                val shimmerOffset by shimmerTransition.animateFloat(
+                    initialValue = -300f,
+                    targetValue = 600f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(3000),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = ""
+                )
 
-                prayers.chunked(2).forEach { rowPrayers ->
+                Column {
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
+                    prayers.chunked(2).forEach { rowPrayers ->
 
-                        rowPrayers.forEach { prayer ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
 
-                            val isCompleted = prayerStates[prayer] == true
-                            val isCurrent = prayer == currentPrayer
-                            val time = prayerTimes[prayer]
+                            rowPrayers.forEach { prayer ->
 
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .background(
-                                        if (isCurrent)
-                                            Color(0xFFE2C07A).copy(alpha = 0.15f)
-                                        else
-                                            Color.White.copy(alpha = 0.05f),
-                                        RoundedCornerShape(22.dp)
-                                    )
-                                    .clickable {
-                                        val newValue = !isCompleted
+                                val isCompleted = prayerStates[prayer] == true
+                                val time = times[prayer]
 
-                                        prayerStates =
-                                            prayerStates.toMutableMap().apply {
-                                                this[prayer] = newValue
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .shadow(6.dp, RoundedCornerShape(20.dp))
+                                        .background(
+                                            Brush.linearGradient(
+                                                colors = listOf(
+                                                    Color(0xFF2A1C17),
+                                                    Color(0xFF2A1C17),
+                                                    Color.White.copy(alpha = 0.05f)
+                                                ),
+                                                start = Offset(shimmerOffset, 0f),
+                                                end = Offset(shimmerOffset + 200f, 300f)
+                                            ),
+                                            RoundedCornerShape(20.dp)
+                                        )
+                                        .clickable {
+                                            val newValue = !isCompleted
+                                            prayerStates =
+                                                prayerStates.toMutableMap().apply {
+                                                    this[prayer] = newValue
+                                                }
+
+                                            scope.launch {
+                                                DataStoreManager.savePrayerState(
+                                                    context,
+                                                    prayer,
+                                                    newValue
+                                                )
                                             }
-
-                                        scope.launch {
-                                            DataStoreManager.savePrayerState(
-                                                context,
-                                                prayer,
-                                                newValue
-                                            )
                                         }
+                                        .padding(20.dp)
+                                ) {
+
+                                    Column {
+
+                                        Text(
+                                            prayer,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White
+                                        )
+
+                                        Spacer(Modifier.height(4.dp))
+
+                                        Text(
+                                            time?.format(formatter) ?: "",
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(0.6f)
+                                        )
+
+                                        Spacer(Modifier.height(14.dp))
+
+                                        Box(
+                                            modifier = Modifier
+                                                .size(14.dp)
+                                                .background(
+                                                    if (isCompleted)
+                                                        Color(0xFFE2C07A)
+                                                    else
+                                                        Color.White.copy(0.25f),
+                                                    CircleShape
+                                                )
+                                        )
                                     }
-                                    .padding(18.dp)
-                            ) {
-
-                                Column {
-
-                                    Text(
-                                        prayer,
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (isCurrent)
-                                            Color(0xFFE2C07A)
-                                        else
-                                            Color.White
-                                    )
-
-                                    Text(
-                                        time?.format(timeFormatter) ?: "",
-                                        fontSize = 12.sp,
-                                        color = Color.White.copy(0.6f)
-                                    )
-
-                                    Spacer(Modifier.height(10.dp))
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(14.dp)
-                                            .background(
-                                                if (isCompleted)
-                                                    Color(0xFFE2C07A)
-                                                else
-                                                    Color.White.copy(0.25f),
-                                                CircleShape
-                                            )
-                                    )
                                 }
+                            }
+
+                            if (rowPrayers.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
 
-                        if (rowPrayers.size == 1) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
+                        Spacer(Modifier.height(18.dp))
                     }
-
-                    Spacer(Modifier.height(14.dp))
                 }
             }
         }
     }
+}
+
+@OptIn(ExperimentalTime::class)
+fun Instant.toLocalTimeSafe(): LocalTime {
+    val zoneId = java.time.ZoneId.systemDefault()
+    val localDateTime =
+        java.time.Instant.ofEpochMilli(this.toEpochMilliseconds())
+            .atZone(zoneId)
+            .toLocalDateTime()
+
+    return LocalTime.of(localDateTime.hour, localDateTime.minute)
 }
