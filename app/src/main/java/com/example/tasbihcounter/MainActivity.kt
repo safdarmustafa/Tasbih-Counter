@@ -34,15 +34,23 @@ import com.example.tasbihcounter.ui.theme.SplashScreenJcTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
-
+import android.os.Build
+import android.Manifest
+import androidx.core.app.ActivityCompat
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         enableEdgeToEdge()
         installSplashScreen()
 
-
+        // 🔔 Request Notification Permission (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                1
+            )
+        }
 
         setContent {
             SplashScreenJcTheme {

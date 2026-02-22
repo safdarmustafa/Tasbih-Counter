@@ -27,6 +27,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import androidx.work.*
+import java.time.LocalDateTime
+import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 @Composable
 fun PremiumBackground(content: @Composable () -> Unit) {
@@ -65,26 +69,64 @@ fun PrayerTrackerScreen(
 ) {
 
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // 🔄 Update prayer times using location
     LaunchedEffect(Unit) {
-
         val location = getUserLocation(context)
-
         location?.let {
             viewModel.updatePrayerTimes(it.first, it.second)
         }
     }
-    val scope = rememberCoroutineScope()
 
     val prayers = listOf("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")
-
-    // 🔥 DO NOT BLOCK UI
-    val times = viewModel.prayerTimes
 
     var prayerStates by remember {
         mutableStateOf(prayers.associateWith { false })
     }
 
-    // Optimized DataStore read
+    val times = viewModel.prayerTimes
+
+    // 🔔 Schedule Real Azan Notifications
+    LaunchedEffect(times) {
+
+        if (times.isNotEmpty()) {
+
+            times.forEach { (prayerName, prayerTime) ->
+
+                val now = LocalDateTime.now()
+
+                val prayerDateTime = now
+                    .withHour(prayerTime.hour)
+                    .withMinute(prayerTime.minute)
+                    .withSecond(0)
+
+                val delayMillis =
+                    Duration.between(now, prayerDateTime).toMillis()
+
+                if (delayMillis > 0) {
+
+                    val request =
+                        OneTimeWorkRequestBuilder<AzanWorker>()
+                            .setInitialDelay(delayMillis, TimeUnit.MILLISECONDS)
+                            .setInputData(
+                                workDataOf("prayer" to prayerName)
+                            )
+                            .build()
+
+                    WorkManager
+                        .getInstance(context)
+                        .enqueueUniqueWork(
+                            "azan_$prayerName",
+                            ExistingWorkPolicy.REPLACE,
+                            request
+                        )
+                }
+            }
+        }
+    }
+
+    // 📿 Load prayer completion states
     LaunchedEffect(Unit) {
         prayers.forEach { prayer ->
             val saved = DataStoreManager
@@ -219,11 +261,8 @@ fun PrayerTrackerScreen(
                     }
                 }
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
-                    // ✅ City Name
                     Text(
                         text = viewModel.cityName,
                         fontSize = 14.sp,
@@ -232,7 +271,6 @@ fun PrayerTrackerScreen(
 
                     Spacer(Modifier.height(6.dp))
 
-                    // ✅ NEW: Label
                     Text(
                         text = "Next Prayer",
                         fontSize = 12.sp,
@@ -261,19 +299,8 @@ fun PrayerTrackerScreen(
                         modifier = Modifier.animateContentSize()
                     )
                 }
-                val shimmerTransition = rememberInfiniteTransition(label = "")
-                val shimmerOffset by shimmerTransition.animateFloat(
-                    initialValue = -300f,
-                    targetValue = 600f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(3000),
-                        repeatMode = RepeatMode.Restart
-                    ),
-                    label = ""
-                )
 
                 Column {
-
                     prayers.chunked(2).forEach { rowPrayers ->
 
                         Row(
@@ -296,9 +323,7 @@ fun PrayerTrackerScreen(
                                                     Color(0xFF2A1C17),
                                                     Color(0xFF2A1C17),
                                                     Color.White.copy(alpha = 0.05f)
-                                                ),
-                                                start = Offset(shimmerOffset, 0f),
-                                                end = Offset(shimmerOffset + 200f, 300f)
+                                                )
                                             ),
                                             RoundedCornerShape(20.dp)
                                         )
