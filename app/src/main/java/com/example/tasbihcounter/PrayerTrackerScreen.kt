@@ -71,7 +71,6 @@ fun PrayerTrackerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // 🔄 Update prayer times using location
     LaunchedEffect(Unit) {
         val location = getUserLocation(context)
         location?.let {
@@ -89,11 +88,8 @@ fun PrayerTrackerScreen(
 
     // 🔔 Schedule Real Azan Notifications
     LaunchedEffect(times) {
-
         if (times.isNotEmpty()) {
-
             times.forEach { (prayerName, prayerTime) ->
-
                 val now = LocalDateTime.now()
 
                 val prayerDateTime = now
@@ -126,7 +122,6 @@ fun PrayerTrackerScreen(
         }
     }
 
-    // 📿 Load prayer completion states
     LaunchedEffect(Unit) {
         prayers.forEach { prayer ->
             val saved = DataStoreManager
@@ -275,6 +270,33 @@ fun PrayerTrackerScreen(
                         text = "Next Prayer",
                         fontSize = 12.sp,
                         color = Color.White.copy(0.5f)
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    // 🔔 Azan Mode Toggle
+                    val azanMode by DataStoreManager
+                        .getAzanMode(context)
+                        .collectAsState(initial = AzanMode.FULL_SOUND)
+
+                    Text(
+                        text = when (azanMode) {
+                            AzanMode.FULL_SOUND -> "🔊 Full Azan"
+                            AzanMode.NOTIFICATION_ONLY -> "🔔 Notification Only"
+                            AzanMode.SILENT -> "🔕 Silent"
+                        },
+                        fontSize = 12.sp,
+                        color = Color(0xFFE2C07A),
+                        modifier = Modifier.clickable {
+                            scope.launch {
+                                val nextMode = when (azanMode) {
+                                    AzanMode.SILENT -> AzanMode.FULL_SOUND
+                                    AzanMode.FULL_SOUND -> AzanMode.NOTIFICATION_ONLY
+                                    AzanMode.NOTIFICATION_ONLY -> AzanMode.SILENT
+                                }
+                                DataStoreManager.saveAzanMode(context, nextMode)
+                            }
+                        }
                     )
 
                     Spacer(Modifier.height(4.dp))

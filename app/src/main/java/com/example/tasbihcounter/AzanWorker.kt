@@ -9,9 +9,10 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.flow.first
 
 class AzanWorker(
-    private val context: Context,
+    context: Context,
     params: WorkerParameters
 ) : CoroutineWorker(context, params) {
 
@@ -21,13 +22,23 @@ class AzanWorker(
         val channelId = "azan_channel"
 
         val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            applicationContext.getSystemService(Context.NOTIFICATION_SERVICE)
+                    as NotificationManager
 
-        // ✅ Create Notification Channel WITH sound
+        // 🔔 Get user selected mode from DataStore
+        val azanMode = DataStoreManager
+            .getAzanMode(applicationContext)
+            .first()
+
+        // 🚫 SILENT MODE → Do nothing
+        if (azanMode == AzanMode.SILENT) {
+            return Result.success()
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
             val soundUri = Uri.parse(
-                "android.resource://${context.packageName}/${R.raw.azan}"
+                "android.resource://${applicationContext.packageName}/${R.raw.azan}"
             )
 
             val audioAttributes = AudioAttributes.Builder()
@@ -40,16 +51,34 @@ class AzanWorker(
                 "Prayer Notifications",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
+
                 description = "Azan Notifications"
-                setSound(soundUri, audioAttributes)
                 enableVibration(true)
+
+                when (azanMode) {
+
+                    AzanMode.FULL_SOUND -> {
+                        setSound(soundUri, audioAttributes)
+                    }
+
+                    AzanMode.NOTIFICATION_ONLY -> {
+                        setSound(null, null)
+                    }
+
+                    else -> {
+                        setSound(null, null)
+                    }
+                }
             }
 
             notificationManager.createNotificationChannel(channel)
         }
 
-        // ✅ Build Notification
-        val notification = NotificationCompat.Builder(context, channelId)
+        // 🔔 Build Notification
+        val notification = NotificationCompat.Builder(
+            applicationContext,
+            channelId
+        )
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("🕌 $prayerName")
             .setContentText("It's time for $prayerName prayer")
@@ -57,7 +86,10 @@ class AzanWorker(
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(prayerName.hashCode(), notification)
+        notificationManager.notify(
+            prayerName.hashCode(),
+            notification
+        )
 
         return Result.success()
     }

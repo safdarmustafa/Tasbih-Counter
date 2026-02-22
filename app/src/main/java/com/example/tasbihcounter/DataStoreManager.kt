@@ -12,7 +12,7 @@ private val Context.dataStore by preferencesDataStore(name = "tasbih_prefs")
 object DataStoreManager {
 
     // ===============================
-    // 🔹 TASBIH COUNTER (UNCHANGED)
+    // 🔹 TASBIH COUNTER
     // ===============================
 
     private fun countKey(dhikr: String) =
@@ -31,7 +31,7 @@ object DataStoreManager {
     }
 
     // ===============================
-    // 🔹 PRAYER TRACKER (FIXED)
+    // 🔹 PRAYER TRACKER
     // ===============================
 
     private val DATE_KEY = stringPreferencesKey("saved_date")
@@ -67,6 +67,26 @@ object DataStoreManager {
 
                 prefs[DATE_KEY] = today
             }
+        }
+    }
+
+    // ===============================
+    // 🔔 AZAN MODE (NEW)
+    // ===============================
+
+    private val AZAN_MODE_KEY = stringPreferencesKey("azan_mode")
+
+    suspend fun saveAzanMode(context: Context, mode: AzanMode) {
+        context.dataStore.edit {
+            it[AZAN_MODE_KEY] = mode.name
+        }
+    }
+
+    fun getAzanMode(context: Context): Flow<AzanMode> {
+        return context.dataStore.data.map {
+            AzanMode.valueOf(
+                it[AZAN_MODE_KEY] ?: AzanMode.SILENT.name
+            )
         }
     }
 }
