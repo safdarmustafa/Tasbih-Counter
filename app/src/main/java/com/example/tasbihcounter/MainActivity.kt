@@ -1,4 +1,6 @@
 package com.example.tasbihcounter
+
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 
 import android.media.AudioAttributes
@@ -36,8 +38,11 @@ import java.time.LocalTime
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
         installSplashScreen()
+
+
 
         setContent {
             SplashScreenJcTheme {

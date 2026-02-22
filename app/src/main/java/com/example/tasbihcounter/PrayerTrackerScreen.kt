@@ -2,14 +2,15 @@ package com.example.tasbihcounter
 
 import androidx.compose.animation.core.*
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,14 +21,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import kotlinx.datetime.*
-import kotlin.time.ExperimentalTime
 
-// 🌌 Animated Ambient Background
 @Composable
 fun PremiumBackground(content: @Composable () -> Unit) {
 
@@ -48,10 +48,7 @@ fun PremiumBackground(content: @Composable () -> Unit) {
             .fillMaxSize()
             .background(
                 Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF2B1C17),
-                        Color(0xFF140C09)
-                    ),
+                    colors = listOf(Color(0xFF2B1C17), Color(0xFF140C09)),
                     center = Offset(offset, offset),
                     radius = 1200f
                 )
@@ -61,100 +58,71 @@ fun PremiumBackground(content: @Composable () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalTime::class)
 @Composable
-fun PrayerTrackerScreen(onBack: () -> Unit) {
+fun PrayerTrackerScreen(
+    viewModel: PrayerViewModel = viewModel(),
+    onBack: () -> Unit
+) {
 
     val context = LocalContext.current
+    LaunchedEffect(Unit) {
+
+        val location = getUserLocation(context)
+
+        location?.let {
+            viewModel.updatePrayerTimes(it.first, it.second)
+        }
+    }
     val scope = rememberCoroutineScope()
 
     val prayers = listOf("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")
 
-    var prayerTimes by remember { mutableStateOf<Map<String, LocalTime>?>(null) }
-
-    // Fetch prayer times
-    LaunchedEffect(Unit) {
-
-        val result = kotlinx.coroutines.withContext(
-            kotlinx.coroutines.Dispatchers.IO
-        ) {
-
-            val location = getUserLocation(context)
-
-            if (location != null) {
-
-                val adhanTimes =
-                    PrayerTimeHelper.getTodayPrayerTimes(
-                        location.first,
-                        location.second
-                    )
-
-                mapOf(
-                    "Fajr" to adhanTimes.fajr.toLocalTimeSafe(),
-                    "Dhuhr" to adhanTimes.dhuhr.toLocalTimeSafe(),
-                    "Asr" to adhanTimes.asr.toLocalTimeSafe(),
-                    "Maghrib" to adhanTimes.maghrib.toLocalTimeSafe(),
-                    "Isha" to adhanTimes.isha.toLocalTimeSafe()
-                )
-            } else {
-                null
-            }
-        }
-
-        prayerTimes = result
-    }
-
-
-    if (prayerTimes == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-
-    val times = prayerTimes!!
+    // 🔥 DO NOT BLOCK UI
+    val times = viewModel.prayerTimes
 
     var prayerStates by remember {
         mutableStateOf(prayers.associateWith { false })
     }
 
+    // Optimized DataStore read
     LaunchedEffect(Unit) {
         prayers.forEach { prayer ->
-            launch {
-                DataStoreManager.getPrayerState(context, prayer)
-                    .collect { saved ->
-                        prayerStates = prayerStates.toMutableMap().apply {
-                            this[prayer] = saved
-                        }
-                    }
+            val saved = DataStoreManager
+                .getPrayerState(context, prayer)
+                .first()
+
+            prayerStates = prayerStates.toMutableMap().apply {
+                this[prayer] = saved
             }
         }
     }
 
-    // Real-time clock
     var currentTime by remember { mutableStateOf(LocalTime.now()) }
 
     LaunchedEffect(Unit) {
         while (true) {
-            currentTime = LocalTime.now()
             delay(1000)
+            currentTime = LocalTime.now()
         }
     }
 
     val formatter = DateTimeFormatter.ofPattern("hh:mm a")
 
-    val nextPrayer = when {
-        currentTime.isBefore(times["Fajr"]) -> "Fajr"
-        currentTime.isBefore(times["Dhuhr"]) -> "Dhuhr"
-        currentTime.isBefore(times["Asr"]) -> "Asr"
-        currentTime.isBefore(times["Maghrib"]) -> "Maghrib"
-        currentTime.isBefore(times["Isha"]) -> "Isha"
-        else -> "Fajr"
+    val nextPrayer = if (times.isNotEmpty()) {
+        when {
+            currentTime.isBefore(times["Fajr"]) -> "Fajr"
+            currentTime.isBefore(times["Dhuhr"]) -> "Dhuhr"
+            currentTime.isBefore(times["Asr"]) -> "Asr"
+            currentTime.isBefore(times["Maghrib"]) -> "Maghrib"
+            currentTime.isBefore(times["Isha"]) -> "Isha"
+            else -> "Fajr"
+        }
+    } else {
+        "Fajr"
     }
 
-    val nextTime = times[nextPrayer] ?: LocalTime.MIDNIGHT
+    val nextTime = times[nextPrayer] ?: LocalTime.now()
 
-    // 🔥 SMOOTH PER-SECOND COUNTDOWN
     val nowInSeconds = currentTime.toSecondOfDay()
     val nextInSeconds = nextTime.toSecondOfDay()
 
@@ -185,7 +153,11 @@ fun PrayerTrackerScreen(onBack: () -> Unit) {
 
     PremiumBackground {
 
-        Box(Modifier.fillMaxSize().padding(24.dp)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(24.dp)
+        ) {
 
             Column(
                 Modifier.fillMaxSize(),
@@ -193,7 +165,6 @@ fun PrayerTrackerScreen(onBack: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
 
-                // ✨ Golden Glow Pulse
                 val pulse by rememberInfiniteTransition(label = "")
                     .animateFloat(
                         initialValue = 0.7f,
@@ -248,8 +219,27 @@ fun PrayerTrackerScreen(onBack: () -> Unit) {
                     }
                 }
 
-                // NEXT PRAYER + SMOOTH COUNTDOWN
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
+                    // ✅ City Name
+                    Text(
+                        text = viewModel.cityName,
+                        fontSize = 14.sp,
+                        color = Color.White.copy(0.7f)
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    // ✅ NEW: Label
+                    Text(
+                        text = "Next Prayer",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(0.5f)
+                    )
+
+                    Spacer(Modifier.height(4.dp))
 
                     Text(
                         nextPrayer.uppercase(),
@@ -271,8 +261,6 @@ fun PrayerTrackerScreen(onBack: () -> Unit) {
                         modifier = Modifier.animateContentSize()
                     )
                 }
-
-                // Shimmer Cards
                 val shimmerTransition = rememberInfiniteTransition(label = "")
                 val shimmerOffset by shimmerTransition.animateFloat(
                     initialValue = -300f,
@@ -343,7 +331,7 @@ fun PrayerTrackerScreen(onBack: () -> Unit) {
                                         Spacer(Modifier.height(4.dp))
 
                                         Text(
-                                            time?.format(formatter) ?: "",
+                                            time?.format(formatter) ?: "--:--",
                                             fontSize = 12.sp,
                                             color = Color.White.copy(0.6f)
                                         )
@@ -376,15 +364,4 @@ fun PrayerTrackerScreen(onBack: () -> Unit) {
             }
         }
     }
-}
-
-@OptIn(ExperimentalTime::class)
-fun Instant.toLocalTimeSafe(): LocalTime {
-    val zoneId = java.time.ZoneId.systemDefault()
-    val localDateTime =
-        java.time.Instant.ofEpochMilli(this.toEpochMilliseconds())
-            .atZone(zoneId)
-            .toLocalDateTime()
-
-    return LocalTime.of(localDateTime.hour, localDateTime.minute)
 }
