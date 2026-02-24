@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SplashScreenJcTheme {
-                AppNavigation()
+                AuthGate()
             }
         }
     }
@@ -383,5 +383,20 @@ fun IslamicSplash() {
                 Text("Reset", color = Color.White)
             }
         }
+    }
+}
+@Composable
+fun AuthGate() {
+    val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+    var isLoggedIn by remember { mutableStateOf(auth.currentUser != null) }
+
+    if (isLoggedIn) {
+        AppNavigation()
+    } else {
+        LoginScreen(
+            onLoginSuccess = {
+                isLoggedIn = true
+            }
+        )
     }
 }
